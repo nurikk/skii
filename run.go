@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-func getNeighbors(row int, cell int, field [][]int) [][]int {
+//GetNeighbors find GetNeighbors
+func GetNeighbors(row int, cell int, field [][]int) [][]int {
 	var neighbors [][]int
 	directions := [4][2]int{
 		{-1, 0},
@@ -29,13 +30,15 @@ func getNeighbors(row int, cell int, field [][]int) [][]int {
 	}
 	return neighbors
 }
-func fundPeaks(field [][]int) [][]int {
+
+// FindPeaks find peaks in field
+func FindPeaks(field [][]int) [][]int {
 	var data [][]int
 	for rowNum, row := range field {
 		// fmt.Printf("rowNum: %v\n", rowNum)
 		for cellNum := range row {
 			// fmt.Printf("cellNum: %v\n", cellNum)
-			neighbors := getNeighbors(rowNum, cellNum, field)
+			neighbors := GetNeighbors(rowNum, cellNum, field)
 			// fmt.Printf("cell: %v(%vx%v), neighbors: %v\n", field[rowNum][cellNum], rowNum, cellNum, neighbors)
 			ok := true
 			for _, neighbor := range neighbors {
@@ -53,7 +56,7 @@ func fundPeaks(field [][]int) [][]int {
 }
 func getPossibleDirections(row int, cell int, field [][]int) [][]int {
 	var directions [][]int
-	neighbors := getNeighbors(row, cell, field)
+	neighbors := GetNeighbors(row, cell, field)
 	for _, neighbor := range neighbors {
 		if field[neighbor[0]][neighbor[1]] < field[row][cell] {
 			directions = append(directions, neighbor)
@@ -93,21 +96,24 @@ func (s byLength) Less(i, j int) bool {
 	return len(s[i]) < len(s[j])
 }
 
-func solve(field [][]int) {
-	peaks := fundPeaks(field)
+//Solve is solve func
+func Solve(field [][]int) []int {
+	peaks := FindPeaks(field)
 	var results [][]int
+	var winner []int
 	for _, peak := range peaks {
 		findNextSteps(peak[0], peak[1], field, &[]int{}, &results)
 	}
 	if len(results) > 0 {
 		sort.Sort(byLength(results))
-		winner := results[len(results)-1]
-		fmt.Printf("winner: %v len: %v, drop %v", winner, len(winner), getDrop(winner))
+		winner = results[len(results)-1]
 	}
-
+	return winner
 }
-func main() {
-	file, err := os.Open("./map.txt")
+
+//ReadMap read map from file
+func ReadMap(fileName string) [][]int {
+	file, err := os.Open(fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -134,5 +140,10 @@ func main() {
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
 	}
-	solve(field)
+	return field
+}
+
+func main() {
+	winner := Solve(ReadMap("./map.txt"))
+	fmt.Printf("winner: %v len: %v, drop %v", winner, len(winner), getDrop(winner))
 }
