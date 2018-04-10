@@ -39,7 +39,7 @@ func TestSolve(t *testing.T) {
 			{6, 3, 2, 5},
 			{4, 4, 1, 6},
 		}
-		testAnswer := []int{8, 5, 3, 2, 1}
+		testAnswer := []int{9, 5, 3, 2, 1}
 
 		g.It("Should solve correctly ", func() {
 			g.Assert(Solve(testField)).Equal(testAnswer)

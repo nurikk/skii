@@ -93,12 +93,16 @@ func (s byLength) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 func (s byLength) Less(i, j int) bool {
+	if len(s[i]) == len(s[j]) {
+		return getDrop(s[i]) < getDrop(s[j])
+	}
 	return len(s[i]) < len(s[j])
 }
 
 //Solve is solve func
 func Solve(field [][]int) []int {
 	peaks := FindPeaks(field)
+	//fmt.Printf("peaks: %v", peaks)
 	var results [][]int
 	var winner []int
 	for _, peak := range peaks {
