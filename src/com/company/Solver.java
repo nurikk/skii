@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.LineNumberReader;
 import java.util.*;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -18,11 +17,12 @@ public class Solver {
     private String fileName;
 
 
-    private int[][] field;
+    private List<List<Point>> field = new ArrayList<>();
     private int maxRows;
     private int maxCols;
     private List<List<Integer>> results = new ArrayList<>();
 
+    private int maxPathLen = 0;
 
     /**
      * @param fileName ski map file
@@ -31,6 +31,7 @@ public class Solver {
         this.fileName = fileName;
     }
     private void readFile(String fileName) {
+        long start = System.currentTimeMillis();
         try {
             LineNumberReader lineNumberReader = new LineNumberReader(new FileReader(fileName));
             String line;
@@ -40,97 +41,94 @@ public class Solver {
                 if (lineNumber == -1) {
                     this.maxRows = lineData[0];
                     this.maxCols = lineData[1];
-                    this.field = new int[this.maxRows][this.maxCols];
                 } else {
-                    this.field[lineNumber] = lineData;
+                    List<Point> newRow = Arrays.stream(lineData).mapToObj(elevation -> new Point(elevation)).collect(Collectors.toList());
+                    this.field.add(lineNumber, newRow);
+
                 }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+        System.out.printf("readFile:  %d ms%n", (System.currentTimeMillis() - start));
     }
+
     private boolean exists(int row, int cell) {
         return row >= 0 && row < this.maxRows && cell >= 0 && cell < this.maxCols;
     }
 
-    private List<int[]> getNeighbors(int row, int cell) {
-        List<int[]> neighbors = new ArrayList<>();
+    private void findNextSteps(Point peak, List<Integer> currentPath) {
+        currentPath.add(peak.getElevation());
 
-       int[][] directions = new int[][]{
-               {-1, 0},
-               {0, -1},
-               {1, 0},
-               {0, 1}
-       };
-
-        for (int[] direction : directions) {
-            int moveX = row + direction[0];
-            int moveY = cell + direction[1];
-            if (this.exists(moveX, moveY)) {
-                neighbors.add(new int[]{moveX, moveY});
-            }
-        }
-       return neighbors;
-    }
-
-    private List<int[]> findPeaks() {
-        List<int[]> peaks = new ArrayList<>();
-
-        for (int row = 0; row < this.maxRows; row++){
-            for(int coll = 0; coll < this.maxCols; coll++){
-                int finalRow = row;
-                int finalColl = coll;
-                Predicate<int[]> check = neighbor -> this.field[finalRow][finalColl] > this.field[neighbor[0]][neighbor[1]];
-
-                List<int[]> neighbors = this.getNeighbors(row, coll);
-                if (neighbors.stream().allMatch(check)){
-                    peaks.add(new int[]{finalRow, finalColl});
-                }
-            }
-        }
-        return peaks;
-    }
-
-    private List<int[]> getPossibleDirections(int row, int col){
-        Predicate<int[]> check = neighbor -> this.field[row][col] > this.field[neighbor[0]][neighbor[1]];
-
-        return this.getNeighbors(row, col).stream().filter(check).collect(Collectors.toCollection(ArrayList::new));
-    }
-
-
-    private void findNextSteps(int row, int col, List<Integer> currentPath) {
-        currentPath.add(this.field[row][col]);
-
-        List<int[]> movements = this.getPossibleDirections(row, col);
-
-        movements.forEach(movement -> {
+        peak.getNeighbors().forEach(movement -> {
             List<Integer> copyCurrentPath = new ArrayList<>(currentPath);
-            List<int[]> nextMovements = this.getPossibleDirections(movement[0], movement[1]);
-            if (nextMovements.isEmpty()) {
-                copyCurrentPath.add(this.field[movement[0]][movement[1]]);
-                this.results.add(copyCurrentPath);
+            if (movement.getNeighbors().isEmpty()) {
+                copyCurrentPath.add(movement.getElevation());
+                if (copyCurrentPath.size() >= this.maxPathLen){
+                    this.results.add(copyCurrentPath);
+                    this.maxPathLen = copyCurrentPath.size();
+                }
             } else {
-                this.findNextSteps(movement[0], movement[1], copyCurrentPath);
+                this.findNextSteps(movement, copyCurrentPath);
             }
 
         });
     }
+    private void buildMap(){
+        long start = System.currentTimeMillis();
+        int[][] directions = new int[][]{
+                {-1, 0},
+                {0, -1},
+                {1, 0},
+                {0, 1}
+        };
+       for (int row = 0; row < this.maxRows; row++){
+           for (int col = 0; col < this.maxCols; col++){
+               boolean isPeak = true;
+               Point currPoint = this.field.get(row).get(col);
+               for (int[] direction : directions) {
+                   int moveX = row + direction[0];
+                   int moveY = col + direction[1];
+                   if (this.exists(moveX, moveY)) {
+                       Point n = field.get(moveX).get(moveY);
+                       if (currPoint.getElevation() <= n.getElevation()){
+                           isPeak = false;
+                       } else {
+                           currPoint.addNeighbor(n);
+                       }
+                   }
+               }
+               currPoint.setPeak(isPeak);
+           }
+       }
+        System.out.printf("buildMap:  %d ms%n", (System.currentTimeMillis() - start));
+    }
     public void solve(){
-
+        long start = System.currentTimeMillis();
         this.readFile(this.fileName);
-        List<int[]> peaks = this.findPeaks();
-        peaks.forEach(peak -> this.findNextSteps(peak[0], peak[1], new ArrayList<>()));
+        this.buildMap();
 
+        long startIterate = System.currentTimeMillis();
+        for (List<Point> row : this.field) {
+            row.stream().filter(p -> p.isPeak()).forEach(peak -> {
+                this.findNextSteps(peak, new ArrayList<>());
+            });
+        }
+        System.out.printf("iterate findNextSteps:  %d ms%n", (System.currentTimeMillis() - startIterate));
+
+
+        long startFinishing = System.currentTimeMillis();
         Function<List<Integer>, Integer> getDrop = (path) -> path.get(0) - path.get(path.size() - 1);
         Comparator<List<Integer>> comparator = Comparator.comparingInt(List::size);
         comparator = comparator.thenComparing(Comparator.comparing(getDrop));
-
         this.results.sort(comparator);
-
         List<Integer> winner =  this.results.get(this.results.size() - 1);
+        System.out.printf("startFinishing:  %d ms%n", (System.currentTimeMillis() - startFinishing));
+
         System.out.println("winner:" + winner);
         System.out.println("len:" + winner.size());
         System.out.println("drop:" + getDrop.apply(winner));
+        System.out.printf("solve:  %d ms%n", (System.currentTimeMillis() - start));
 
     }
 }
