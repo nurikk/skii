@@ -5,10 +5,8 @@ package com.company;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.LineNumberReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
+import java.util.*;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -23,7 +21,7 @@ public class Solver {
     private int[][] field;
     private int maxRows;
     private int maxCols;
-    private ArrayList<ArrayList<Integer>> results = new ArrayList<>();
+    private List<List<Integer>> results = new ArrayList<>();
 
 
     /**
@@ -55,8 +53,8 @@ public class Solver {
         return row >= 0 && row < this.maxRows && cell >= 0 && cell < this.maxCols;
     }
 
-    private ArrayList<int[]> getNeighbors(int row, int cell) {
-        ArrayList<int[]> neighbors = new ArrayList<>();
+    private List<int[]> getNeighbors(int row, int cell) {
+        List<int[]> neighbors = new ArrayList<>();
 
        int[][] directions = new int[][]{
                {-1, 0},
@@ -75,8 +73,8 @@ public class Solver {
        return neighbors;
     }
 
-    private ArrayList<int[]> findPeaks(){
-        ArrayList<int[]> peaks = new ArrayList<>();
+    private List<int[]> findPeaks() {
+        List<int[]> peaks = new ArrayList<>();
 
         for (int row = 0; row < this.maxRows; row++){
             for(int coll = 0; coll < this.maxCols; coll++){
@@ -84,7 +82,7 @@ public class Solver {
                 int finalColl = coll;
                 Predicate<int[]> check = neighbor -> this.field[finalRow][finalColl] > this.field[neighbor[0]][neighbor[1]];
 
-                ArrayList<int[]> neighbors = this.getNeighbors(row, coll);
+                List<int[]> neighbors = this.getNeighbors(row, coll);
                 if (neighbors.stream().allMatch(check)){
                     peaks.add(new int[]{finalRow, finalColl});
                 }
@@ -93,21 +91,21 @@ public class Solver {
         return peaks;
     }
 
-    private ArrayList<int[]> getPossibleDirections(int row, int col){
+    private List<int[]> getPossibleDirections(int row, int col){
         Predicate<int[]> check = neighbor -> this.field[row][col] > this.field[neighbor[0]][neighbor[1]];
 
         return this.getNeighbors(row, col).stream().filter(check).collect(Collectors.toCollection(ArrayList::new));
     }
 
 
-    private void findNextSteps(int row, int col, ArrayList<Integer> currentPath) {
+    private void findNextSteps(int row, int col, List<Integer> currentPath) {
         currentPath.add(this.field[row][col]);
 
-        ArrayList<int[]> movements = this.getPossibleDirections(row, col);
+        List<int[]> movements = this.getPossibleDirections(row, col);
 
         movements.forEach(movement -> {
-            ArrayList<Integer> copyCurrentPath = new ArrayList<>(currentPath);
-            ArrayList<int[]> nextMovements = this.getPossibleDirections(movement[0], movement[1]);
+            List<Integer> copyCurrentPath = new ArrayList<>(currentPath);
+            List<int[]> nextMovements = this.getPossibleDirections(movement[0], movement[1]);
             if (nextMovements.isEmpty()) {
                 copyCurrentPath.add(this.field[movement[0]][movement[1]]);
                 this.results.add(copyCurrentPath);
@@ -120,20 +118,19 @@ public class Solver {
     public void solve(){
 
         this.readFile(this.fileName);
-        ArrayList<int[]> peaks = this.findPeaks();
+        List<int[]> peaks = this.findPeaks();
         peaks.forEach(peak -> this.findNextSteps(peak[0], peak[1], new ArrayList<>()));
 
-        Comparator<ArrayList<Integer>> comparator = Comparator.comparingInt(ArrayList::size);
-        comparator = comparator.thenComparing(Comparator.comparing(c -> c.get(0) - c.get(c.size() - 1)));
+        Function<List<Integer>, Integer> getDrop = (path) -> path.get(0) - path.get(path.size() - 1);
+        Comparator<List<Integer>> comparator = Comparator.comparingInt(List::size);
+        comparator = comparator.thenComparing(Comparator.comparing(getDrop));
 
         this.results.sort(comparator);
-//        Integer getDrop = (ArrayList<Integer> path) -> path.get(0) - path.get(path.size() - 1);
 
-
-        ArrayList<Integer> winner =  this.results.get(this.results.size() - 1);
+        List<Integer> winner =  this.results.get(this.results.size() - 1);
         System.out.println("winner:" + winner);
         System.out.println("len:" + winner.size());
-        System.out.println("drop:" + (winner.get(0) - winner.get(winner.size() - 1)));
+        System.out.println("drop:" + getDrop.apply(winner));
 
     }
 }
