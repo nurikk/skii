@@ -2,121 +2,95 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
-	"sort"
+	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 )
 
-//GetNeighbors find GetNeighbors
-func GetNeighbors(row int, cell int, field [][]int) [][]int {
-	var neighbors [][]int
-	directions := [4][2]int{
-		{-1, 0},
-		{0, -1},
-		{1, 0},
-		{0, 1},
-	}
-	for _, direction := range directions {
-		neighborRow := row + direction[0]
-		neighborCell := cell + direction[1]
-		if neighborRow >= 0 && neighborRow < len(field) {
-			if neighborCell >= 0 && neighborCell < len(field[0]) {
-				neighbors = append(neighbors, []int{neighborRow, neighborCell})
-			}
-		}
-	}
-	return neighbors
+//Point is point
+type Point struct {
+	Elevation int
+	IsPeak    bool
+	Neighbors *[]Point
 }
 
-// FindPeaks find peaks in field
-func FindPeaks(field [][]int) [][]int {
-	var data [][]int
-	for rowNum, row := range field {
-		// fmt.Printf("rowNum: %v\n", rowNum)
-		for cellNum := range row {
-			// fmt.Printf("cellNum: %v\n", cellNum)
-			neighbors := GetNeighbors(rowNum, cellNum, field)
-			// fmt.Printf("cell: %v(%vx%v), neighbors: %v\n", field[rowNum][cellNum], rowNum, cellNum, neighbors)
-			ok := true
-			for _, neighbor := range neighbors {
-				if field[neighbor[0]][neighbor[1]] >= field[rowNum][cellNum] {
-					ok = false
-				}
-			}
-			if ok {
-				data = append(data, []int{rowNum, cellNum})
-			}
+var directions = [4][2]int{
+	{-1, 0},
+	{0, -1},
+	{1, 0},
+	{0, 1},
+}
 
-		}
-	}
-	return data
-}
-func getPossibleDirections(row int, cell int, field [][]int) [][]int {
-	var directions [][]int
-	neighbors := GetNeighbors(row, cell, field)
-	for _, neighbor := range neighbors {
-		if field[neighbor[0]][neighbor[1]] < field[row][cell] {
-			directions = append(directions, neighbor)
-		}
-	}
-	return directions
-}
-func findNextSteps(row int, cell int, field [][]int, currentPath *[]int, results *[][]int) {
-	*currentPath = append(*currentPath, field[row][cell])
-	possibleDirections := getPossibleDirections(row, cell, field)
-	for _, direction := range possibleDirections {
+func findNextSteps(point Point, currentPath *[]int, winner *[]int) {
+	*currentPath = append(*currentPath, point.Elevation)
+	for _, direction := range *point.Neighbors {
 		copyCurrentPath := make([]int, len(*currentPath))
 		copy(copyCurrentPath, *currentPath)
-		nextMoves := getPossibleDirections(direction[0], direction[1], field)
-		if len(nextMoves) == 0 {
-			copyCurrentPath = append(copyCurrentPath, field[direction[0]][direction[1]])
-			*results = append(*results, copyCurrentPath)
+		if len(*direction.Neighbors) == 0 {
+			copyCurrentPath = append(copyCurrentPath, direction.Elevation)
+			if len(copyCurrentPath) > len(*winner) || (len(copyCurrentPath) == len(*winner) && getDrop(copyCurrentPath) > getDrop(*winner)) {
+				*winner = copyCurrentPath
+			}
 		} else {
-			findNextSteps(direction[0], direction[1], field, &copyCurrentPath, results)
+			findNextSteps(direction, &copyCurrentPath, winner)
 		}
 	}
 }
 
-type byLength [][]int
-
 func getDrop(path []int) int {
+	if len(path) == 0 {
+		return 0
+	}
 	return path[0] - path[len(path)-1]
 }
 
-func (s byLength) Len() int {
-	return len(s)
-}
-func (s byLength) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s byLength) Less(i, j int) bool {
-	if len(s[i]) == len(s[j]) {
-		return getDrop(s[i]) < getDrop(s[j])
+func rebuildMap(field *[][]Point) {
+	maxRow := len(*field)
+	maxCol := len((*field)[0])
+	for rowNum := 0; rowNum < maxRow; rowNum++ {
+		for cellNum := 0; cellNum < maxCol; cellNum++ {
+			isPeak := true
+			for _, direction := range directions {
+				neighborRow := rowNum + direction[0]
+				neighborCell := cellNum + direction[1]
+				if neighborRow >= 0 && neighborRow < maxRow && neighborCell >= 0 && neighborCell < maxCol {
+					neighbor := (*field)[neighborRow][neighborCell]
+					if (*field)[rowNum][cellNum].Elevation <= neighbor.Elevation {
+						isPeak = false
+					} else {
+						*((*field)[rowNum][cellNum]).Neighbors = append(*((*field)[rowNum][cellNum]).Neighbors, neighbor)
+					}
+				}
+			}
+			(*field)[rowNum][cellNum].IsPeak = isPeak
+		}
 	}
-	return len(s[i]) < len(s[j])
 }
 
 //Solve is solve func
-func Solve(field [][]int) []int {
-	peaks := FindPeaks(field)
-	//fmt.Printf("peaks: %v", peaks)
-	var results [][]int
+func Solve(field [][]Point) []int {
 	var winner []int
-	for _, peak := range peaks {
-		findNextSteps(peak[0], peak[1], field, &[]int{}, &results)
-	}
-	if len(results) > 0 {
-		sort.Sort(byLength(results))
-		winner = results[len(results)-1]
+	rebuildMap(&field)
+	maxRow := len(field)
+	maxCol := len(field[0])
+
+	for rn := 0; rn < maxRow; rn++ {
+		for cn := 0; cn < maxCol; cn++ {
+			if field[rn][cn].IsPeak {
+				findNextSteps(field[rn][cn], &[]int{}, &winner)
+			}
+		}
 	}
 	return winner
 }
 
 //ReadMap read map from file
-func ReadMap(fileName string) [][]int {
+func ReadMap(fileName string) [][]Point {
 	file, err := os.Open(fileName)
 	if err != nil {
 		log.Fatal(err)
@@ -125,15 +99,15 @@ func ReadMap(fileName string) [][]int {
 
 	scanner := bufio.NewScanner(file)
 	pos := 0
-	var field [][]int
+	var field [][]Point
 
 	for scanner.Scan() {
 		inputRow := strings.Split(scanner.Text(), " ")
 		if pos > 0 {
-			var row []int
+			var row []Point
 			for _, cell := range inputRow {
 				if cellValue, ok := strconv.Atoi(cell); ok == nil {
-					row = append(row, cellValue)
+					row = append(row, Point{Elevation: cellValue, Neighbors: &[]Point{}})
 				}
 			}
 			field = append(field, row)
@@ -147,7 +121,32 @@ func ReadMap(fileName string) [][]int {
 	return field
 }
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+
 func main() {
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 	winner := Solve(ReadMap("./map.txt"))
 	fmt.Printf("winner: %v len: %v, drop %v", winner, len(winner), getDrop(winner))
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+		f.Close()
+	}
 }
